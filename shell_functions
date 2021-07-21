@@ -1,51 +1,65 @@
+#!bash
 CLIENT_ID="${CLIENT_ID:-$(pass show Mozilla/person_api_client_id)}"
 CLIENT_SECRET="${CLIENT_SECRET:-$(pass show Mozilla/person_api_client_secret)}"
 GH_LOGIN="${GH_LOGIN:-$(pass show Mozilla/moz-hwine-PAT)}"
 URL=https://person.api.sso.mozilla.com
 AUTH0_URL=https://auth.mozilla.auth0.com
+TOKEN_ISSUE_URL="${AUTH0_URL}/oauth/token"
+
+_get_bearer_token() {
+  local CIS_TOKEN=$(curl --silent --request POST --url $TOKEN_ISSUE_URL --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}"| jq -r '.access_token')
+  echo $CIS_TOKEN
+}
+
+_uri_escape() {
+  echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))"
+}
+
+_filter_json() {
+  jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+}
 
 person-api-github-from-email() {
-  BEARER=$(curl --silent --request POST --url https://auth.mozilla.auth0.com/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}"| jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
   curl --silent -H "Authorization: Bearer $BEARER" "https://person.api.sso.mozilla.com/v2/user/primary_email/$USERID?active=any" \
     | jq -c '.identities | { "v3": .github_id_v3.value, "v4": .github_id_v4.value }'
 }
 
 person-api-email() {
-  BEARER=$(curl --silent --request POST --url https://auth.mozilla.auth0.com/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}"| jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "https://person.api.sso.mozilla.com/v2/user/primary_email/$USERID?active=any" | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
+  curl --silent -H "Authorization: Bearer $BEARER" "https://person.api.sso.mozilla.com/v2/user/primary_email/$USERID?active=any" | _filter_json
 }
 
 person-api-userid() {
-  BEARER=$(curl --silent --request POST --url https://auth.mozilla.auth0.com/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}" | jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "https://person.api.sso.mozilla.com/v2/user/user_id/$USERID?active=any" | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
+  curl --silent -H "Authorization: Bearer $BEARER" "https://person.api.sso.mozilla.com/v2/user/user_id/$USERID?active=any" | _filter_json
 }
 
 person-api-username() {
-  #echo "active: '$active'"
-  BEARER=$(curl --silent --request POST --url $AUTH0_URL/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}" | tee username-bearer.json | jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/user/primary_username/$USERID?active=${active:-any}" | tee username.json | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
+  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/user/primary_username/$USERID?active=${active:-any}" | tee username.json | _filter_json
 }
 
 person-api-metadata() {
-  BEARER=$(curl --silent --request POST --url $AUTH0_URL/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}" | tee metadata-bearer.json | jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/user/metadata/$USERID?active=any" | tee username.json | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
+  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/user/metadata/$USERID?active=any" | tee username.json | _filter_json
 }
 
 person-api-attribute-contains() {
-  BEARER=$(curl --silent --request POST --url $AUTH0_URL/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}" | tee metadata-bearer.json | jq -r '.access_token')
-  # on this call '=' needs to not be quoted
-  USERID=$(echo $1 ) #| python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all/by_attribute_contains?active=True&$USERID" | tee username.json | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  # on this call the '=' needs to not be quoted
+  local USERID=$(echo $1 )
+  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all/by_attribute_contains?active=True&$USERID" | tee username.json | _filter_json
 }
 
 person-api-all() {
-  BEARER=$(curl --silent --request POST --url $AUTH0_URL/oauth/token --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}" | tee metadata-bearer.json | jq -r '.access_token')
-  USERID=$(echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
-  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all?$USERID" | tee username.json | jq 'walk(if type == "object" then with_entries(select(.key | test("signature|metadata") | not)) else . end) | walk(if type == "object" and has("values") then .values else . end) | walk(if type == "object" and has("value") then .value else . end)'
+  local BEARER=$(_get_bearer_token)
+  local USERID=$(_uri_escape "$1")
+  curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all?$USERID" | tee username.json | _filter_json
 }
 # vim: ft=sh tw=0 :
