@@ -62,4 +62,12 @@ person-api-all() {
   local USERID=$(_uri_escape "$1")
   curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all?$USERID" | tee username.json | _filter_json
 }
+
+## # work in progress, but I can't remember what for :/
+## person-api-github-login() {
+##   local BEARER=$(_get_bearer_token)
+##   local USERID=$(_uri_escape "$1")
+##   curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/search/simple/?q=sciurius&w=staff" | tee username.json | _filter_json
+## }
+
 # vim: ft=sh tw=0 :
