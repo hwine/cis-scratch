@@ -8,11 +8,11 @@ TOKEN_ISSUE_URL="${AUTH0_URL}/oauth/token"
 
 _get_bearer_token() {
   local CIS_TOKEN=$(curl --silent --request POST --url $TOKEN_ISSUE_URL --header "Content-Type: application/json" --data "{\"client_id\":\"${CLIENT_ID}\",\"client_secret\":\"${CLIENT_SECRET}\",\"audience\":\"api.sso.mozilla.com\",\"grant_type\":\"client_credentials\"}"| jq -r '.access_token')
-  echo $CIS_TOKEN
+  echo "$CIS_TOKEN"
 }
 
 _uri_escape() {
-  echo $1 | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))"
+  echo "$1" | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))"
 }
 
 _filter_json() {
@@ -53,7 +53,7 @@ person-api-metadata() {
 person-api-attribute-contains() {
   local BEARER=$(_get_bearer_token)
   # on this call the '=' needs to not be quoted
-  local USERID=$(echo $1 )
+  local USERID="$1"
   curl --silent -H "Authorization: Bearer $BEARER" "$URL/v2/users/id/all/by_attribute_contains?active=True&$USERID" | tee username.json | _filter_json
 }
 
@@ -72,17 +72,17 @@ person-api-github-login() {
 add_owner() {
   local email="${1}"
   shift
-  local orgs="$@"
+  local -a orgs=("$@")
   local org
   local v3id=$(person-api-github-from-email "${email}" | jq  -r ".v3")
   # now create invite
-  for org in "${orgs}"; do
-    echo -n "$email $org: "
+  for org in "${orgs[@]}"; do
+    echo -n "$email ($v3id) $org: "
     curl --include --silent \
       -X POST \
       -H "Accept: application/vnd.github.v3+json" \
       -H "Authorization: token $GH_LOGIN" \
-      https://api.github.com/orgs/${org}/invitations \
+      "https://api.github.com/orgs/${org}/invitations" \
       -d '{"invitee_id":'"${v3id}"', "role":"admin"}' \
     | head -n 1  # report response code
   done
