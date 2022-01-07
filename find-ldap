@@ -1,0 +1,82 @@
+#/usr/bin/env bash
+
+USAGE="usage: ${0##*/} [options] arg...
+find ldap user name & email, if they exist
+
+Arguments:
+    arg		    posix name or email
+
+Options:
+    -h|--help	    output this help
+"
+
+set -eu
+
+warn() { for m; do echo "$m"; done 1>&2 ; }
+die() { warn "$@" ; exit 2; }
+usage() { warn "$@" "${USAGE:-}" ; [[ $# == 0 ]] && exit 0 || exit 1;}
+
+# Parse options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+	-h|--help) usage ;;
+	-*) usage "Unknown option '$1'" ;;
+	*) break ;;
+    esac
+    shift
+done
+
+# Now have non-option args
+test $# -gt 0 || usage "Missing args"
+
+# end boiler plate
+
+function _got_json() {
+    # a miss still returns an empty object "{}"
+    local json="${1}"
+    return $([[ ${#json} -gt 4 ]])
+}
+
+function query_pmo() {
+    local q="${1}"
+    local posix="${q%%@*}"  # strip email domain
+    local json
+    # treat as posix ID first
+    json=$(person-api-username "${posix}")
+    if ! _got_json "$json"; then
+	# check all valid email domains
+	for ed in mozilla.com mozillafoundation.org getpocket.com; do
+	    json=$(person-api-email ${posix}@${ed})
+	    if _got_json "$json"; then
+		break
+	    else
+		# no hits, don't return anything
+		json=""
+	    fi
+	done
+    fi
+    echo "${json}"
+}
+
+function print_ids() {
+    local json="${1}"
+    local posix email
+    local pretty=$( echo "${json}" | jq '.identities | {mozilla_posix_id, mozilla_ldap_primary_email}')
+    echo "${pretty}"
+}
+
+source shell_functions
+
+
+found_all=true
+for query; do
+    json=$(query_pmo $query)
+    if [[ -n "${json}" ]]; then
+	print_ids "${json}"
+    else
+	echo "no matches for '${query}'"
+	found_all=false
+    fi
+done
+
+exit $(${found_all})
