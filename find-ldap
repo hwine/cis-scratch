@@ -12,6 +12,8 @@ Options:
 
 set -eu
 
+progDir=$(cd $(dirname "$0"); pwd -P)
+
 warn() { for m; do echo "$m"; done 1>&2 ; }
 die() { warn "$@" ; exit 2; }
 usage() { warn "$@" "${USAGE:-}" ; [[ $# == 0 ]] && exit 0 || exit 1;}
@@ -61,11 +63,11 @@ function query_pmo() {
 function print_ids() {
     local json="${1}"
     local posix email
-    local pretty=$( echo "${json}" | jq '.identities | {mozilla_posix_id, mozilla_ldap_primary_email}')
+    local pretty=$( echo "${json}" | jq '{ active: .active,  mozilla_posix_id : .identities.mozilla_posix_id, mozilla_ldap_primary_email: .identities.mozilla_ldap_primary_email}')
     echo "${pretty}"
 }
 
-source shell_functions
+source "${progDir}/shell_functions"
 
 
 found_all=true
