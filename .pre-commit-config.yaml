@@ -31,7 +31,7 @@ repos:
     - id: forbid-binary
     - id: markdownlint # Configure in .mdlrc
     - id: shellcheck
-      args: ["--exclude", "SC2155"]
+      args: ["--exclude", "SC2155,SC1090"]
 
 - repo: https://github.com/IamTheFij/docker-pre-commit
   rev: v2.0.0

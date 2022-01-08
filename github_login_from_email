@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+USAGE="usage: ${0##*/} email_addr
+
+Check the email address against the CIS to discover the v4id,
+then translate that v4id to a login name."
+
+if [ -n "$DEBUG" ]; then
+    PS4=':${LINENO}+'
+    set -x
+fi
+
+# shellcheck disable=SC2164
+progDir=$(cd "$(dirname "$0")"; pwd -P)
+
+# boilerplate
+warn() { for m; do echo "$m" ; done 1>&2 ; }
+die() { warn "$@" ; exit 2 ; }
+usage() { warn "$@" "${USAGE:-}"; test $# -eq 0 ; exit $? ; }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -h|--help) usage ;;
+    -*) usage "Unknown option '$1'" ;;
+    *) break
+    esac
+    shift
+done
+
+MIN_ARGS=1
+MAX_ARGS=1
+[[ $# -lt $MIN_ARGS || $# -gt $MAX_ARGS ]] && usage "Wrong number of args $#"
+
+email="$1"
+
+# shellcheck disable=SC1091
+source "${progDir}/shell_functions"
+
+v4id="$(person-api-github-from-email "$email" | jq .v4 )"
+
+if [[ -z "$v4id" ]]; then
+    echo "no GitHub login for '$email'"
+else
+    query="
+ query id_lookup(\$id_to_check: ID!) {
+  node(id: \$id_to_check) {
+    ... on User {
+      login
+      id
+      databaseId
+    }
+  }
+}
+"
+    variables="
+{
+  \"id_to_check\": $v4id
+}
+"
+
+    login=$(http \
+                --json \
+                POST 'https://api.github.com/graphql' \
+                "Authorization: Token $GH_LOGIN" \
+                "query=${query}" \
+                "variables=${variables}" \
+            | jq .data.node.login)
+
+    echo "'$email' has GitHub login $login (v4id $v4id)"
+fi

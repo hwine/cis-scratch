@@ -1,4 +1,4 @@
-#/usr/bin/env bash
+#!/usr/bin/env bash
 
 USAGE="usage: ${0##*/} [options] arg...
 find ldap user name & email, if they exist
@@ -12,7 +12,7 @@ Options:
 
 set -eu
 
-progDir=$(cd $(dirname "$0"); pwd -P)
+progDir=$(cd "$(dirname "$0")"; pwd -P)
 
 warn() { for m; do echo "$m"; done 1>&2 ; }
 die() { warn "$@" ; exit 2; }
@@ -36,6 +36,7 @@ test $# -gt 0 || usage "Missing args"
 function _got_json() {
     # a miss still returns an empty object "{}"
     local json="${1}"
+    # shellcheck disable=SC2046
     return $([[ ${#json} -gt 4 ]])
 }
 
@@ -48,7 +49,7 @@ function query_pmo() {
     if ! _got_json "$json"; then
 	# check all valid email domains
 	for ed in mozilla.com mozillafoundation.org getpocket.com; do
-	    json=$(person-api-email ${posix}@${ed})
+	    json=$(person-api-email "${posix}@${ed}")
 	    if _got_json "$json"; then
 		break
 	    else
@@ -62,17 +63,19 @@ function query_pmo() {
 
 function print_ids() {
     local json="${1}"
-    local posix email
-    local pretty=$( echo "${json}" | jq '{ active: .active,  mozilla_posix_id : .identities.mozilla_posix_id, mozilla_ldap_primary_email: .identities.mozilla_ldap_primary_email}')
+    local posix
+    local pretty
+    pretty=$( echo "${json}" | jq '{ active: .active,  mozilla_posix_id : .identities.mozilla_posix_id, mozilla_ldap_primary_email: .identities.mozilla_ldap_primary_email}')
     echo "${pretty}"
 }
 
+# shellcheck disable=SC1091
 source "${progDir}/shell_functions"
 
 
 found_all=true
 for query; do
-    json=$(query_pmo $query)
+    json=$(query_pmo "$query")
     if [[ -n "${json}" ]]; then
 	print_ids "${json}"
     else
@@ -81,4 +84,5 @@ for query; do
     fi
 done
 
+# shellcheck disable=SC2046
 exit $(${found_all})
