@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+USAGE="usage: ${0##*/} [options] email_addr
+
+Check the email address against the CIS to discover active status.
+
+options:
+  --verbose     output text description of status
+
+Exit codes:
+  0  active staff
+  1  not active
+  2  no such email"
+
+if [ -n "$DEBUG" ]; then
+    PS4=':${LINENO}+'
+    set -x
+fi
+
+# shellcheck disable=SC2164
+progDir=$(cd "$(dirname "$0")"; pwd -P)
+
+VERBOSE=false
+
+# boilerplate
+warn() { for m; do echo "$m" ; done 1>&2 ; }
+die() { warn "$@" ; exit 2 ; }
+usage() { warn "$@" "${USAGE:-}"; test $# -eq 0 ; exit $? ; }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --verbose) VERBOSE=true ;;
+    -h|--help) usage ;;
+    -*) usage "Unknown option '$1'" ;;
+    *) break
+    esac
+    shift
+done
+
+MIN_ARGS=1
+MAX_ARGS=1
+[[ $# -lt $MIN_ARGS || $# -gt $MAX_ARGS ]] && usage "Wrong number of args $#"
+
+email="$1"
+
+# shellcheck disable=SC1091
+source "${progDir}/shell_functions"
+
+cis_record="$(person-api-email "$email")"
+mapfile info < <(jq -rc ".active, .access_information.hris.worker_type" < <(echo "$cis_record"))
+
+if [[ -z "$cis_record" || "$cis_record" == "{}" ]]; then
+    $VERBOSE && warn "no record for '$email'"
+    ec=2
+elif ${info[0]}; then
+    $VERBOSE && warn "active ${info[1]:-<unknown>}"
+    ec=0
+else
+    $VERBOSE && warn "${info[0]:-<unknown>} ${info[1]:-<unknown>}"
+    ec=1
+fi
+exit $ec
